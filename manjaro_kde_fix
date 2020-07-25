@@ -1,3 +1,6 @@
 echo "Firefox Mouse Fix"
 sed -i 's/gtk-primary-button-warps-slider=0/gtk-primary-button-warps-slider=1/g' /home/mcmarius11/.config/gtk-3.0/settings.ini
 chmod -w /$HOME/.config/gtk-3.0/settings.ini
+
+echo "KDE K-Runnter disable bookmarks in search"
+sudo sed -i 's/X-KDE-PluginInfo-EnabledByDefault=true/X-KDE-PluginInfo-EnabledByDefault=false/g' /usr/share/kservices5/plasma-runner-bookmarks.desktop
