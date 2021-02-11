@@ -1,6 +1,8 @@
 https://blog.zabbix.com/zabbix-agent-active-vs-passive/9207/
 https://bestmonitoringtools.com/zabbix-agent-linux-install-on-ubuntu-centos-rhel-debian-rasbian/
 
+Tested on Raspberry OS
+
 ##########  SERVER INSTALL  ##########
 
 -> PostgreSQL
