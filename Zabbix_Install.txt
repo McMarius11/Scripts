@@ -1,0 +1,59 @@
+https://blog.zabbix.com/zabbix-agent-active-vs-passive/9207/
+https://bestmonitoringtools.com/zabbix-agent-linux-install-on-ubuntu-centos-rhel-debian-rasbian/
+
+##########  SERVER INSTALL  ##########
+
+-> PostgreSQL
+
+vorab
+
+sudo apt-get install postgresql
+sudo apt-get install nmap
+
+
+
+wget https://repo.zabbix.com/zabbix/5.2/raspbian/pool/main/z/zabbix-release/zabbix-release_5.2-1+debian10_all.deb
+dpkg -i zabbix-release_5.2-1+debian10_all.deb
+sudo apt update 
+sudo apt install zabbix-server-pgsql zabbix-frontend-php php7.3-pgsql zabbix-apache-conf zabbix-agent 
+sudo -u postgres createuser --pwprompt zabbix
+sudo -u postgres createdb -O zabbix zabbix 
+# On Zabbix server host import initial schema and data. You will be prompted to enter your newly created password. 
+zcat /usr/share/doc/zabbix-server-pgsql*/create.sql.gz | sudo -u zabbix psql zabbix 
+
+
+d. Configure the database for Zabbix server
+
+Edit file /etc/zabbix/zabbix_server.conf
+DBPassword=password 
+
+sudo systemctl restart zabbix-server zabbix-agent apache2
+sudo systemctl enable zabbix-server zabbix-agent apache2 
+
+##########  CLIENT INSTALL  ##########
+
+zabbix-agent installieren
+
+sudo nano /etc/zabbix/zabbix_agentd.conf
+Server=192.168.5.43
+ServerActive=192.168.5.43
+
+muss nicht (
+HostMetadata=Linux
+muss nicht )
+
+HostnameItem=system.hostname
+
+# <-Hostname=Zabbix server
+Raute davor
+
+sudo systemctl start zabbix-agent
+sudo systemctl status zabbix-agent
+
+FALSS FEHLER AUFTRITT
+PidFile=/tmp/zabbix/zabbix_agentd.pid <- EDITIEREN und SCHREIBRECHTE JEDEN GEBEN
+
+sudo systemctl restart zabbix-agent 
+sudo systemctl enable zabbix-agent
+
+
