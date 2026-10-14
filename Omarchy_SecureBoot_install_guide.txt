@@ -1,0 +1,134 @@
+OMARCHY MIT SECURE BOOT - INSTALL GUIDE
+=======================================
+Setup: ASRock B650E PG-ITX WiFi (AMI-BIOS), Radeon RX 9070 XT,
+Windows auf eigener Platte (braucht Secure Boot), Omarchy ersetzt Fedora KDE.
+Stand: Oktober 2026, omasecboot v0.1.1
+
+
+TEIL 0: VORBEREITUNG IN FEDORA (ca. 15 Min.)
+--------------------------------------------
+1. Daten sichern. Die Fedora-Platte wird komplett geloescht.
+2. Omarchy-ISO von https://omarchy.org laden und mit Balena Etcher
+   (https://etcher.balena.io) auf einen USB-Stick schreiben.
+3. Zweiten kleinen USB-Stick als FAT32 formatieren (fuer Schluessel-Backups).
+4. Plattennamen merken:
+     lsblk -o NAME,SIZE,MODEL
+   Groesse und Modell der Fedora-Platte notieren.
+
+
+TEIL 1: IM BIOS NACHSCHAUEN (ca. 2 Min.)
+----------------------------------------
+1. Neustart, mehrmals Entf/F2 druecken. F6 = Advanced Mode.
+2. Security -> Secure Boot.
+3. Secure Boot Mode auf "Custom" (erst dann erscheint Key Management).
+4. Key Management -> Platform Key (PK) oeffnen. NICHTS druecken,
+   nur schauen, ob dort "Delete" steht. Handyfoto machen.
+5. Secure Boot auf "Disabled" (der Omarchy-Installer ist nicht signiert).
+6. F10 speichern.
+
+=> "Delete" vorhanden: Weg A.  Kein "Delete": Weg B.
+
+
+TEIL 2: OMARCHY INSTALLIEREN (ca. 15 Min.)
+------------------------------------------
+1. Omarchy-Stick rein, Neustart, F11 = Boot-Menue, USB-Stick waehlen.
+2. Benutzername, Passwort, Tastatur ("de").
+3. WICHTIG: Bei der Plattenauswahl die Fedora-Platte aus Teil 0 waehlen.
+   NICHT die Windows-Platte!
+4. Installation durchlaufen lassen, Stick ab, Neustart.
+5. Terminal (Super + Enter):
+     omarchy-update
+
+
+TEIL 3 - WEG A: PK HAT "DELETE" -> omasecboot (ca. 20 Min.)
+-----------------------------------------------------------
+omasecboot erzeugt eigene Schluessel und ersetzt NUR den Platform Key.
+Microsoft- und ASRock-Schluessel bleiben -> Windows und 9070 XT laufen weiter.
+
+1. Tool installieren:
+     sudo pacman -S --needed base-devel git
+     git clone --branch v0.1.1 https://github.com/peregrinus879/omasecboot
+     cd omasecboot && make package
+     sudo pacman -U omasecboot-0.1.1-1-any.pkg.tar.zst
+2. Erster Durchlauf (Schluessel erzeugen, BIOS-Schluessel sichern):
+     sudo omasecboot setup
+3. Ins BIOS:
+     sudo systemctl reboot --firmware-setup
+   - Security -> Secure Boot -> Key Management
+   - "Factory Key Provision" auf Disabled
+     (sonst spielt das BIOS den alten Schluessel sofort wieder ein)
+   - Platform Key (PK) -> Delete -> bestaetigen
+   - NIEMALS "Clear Secure Boot Keys" (loescht alles, auch das
+     Zertifikat fuer die Grafikkarte -> schwarzer Bildschirm)
+   - Secure Boot bleibt Disabled, F10
+4. Zweiter Durchlauf (Schluessel eintragen):
+     sudo omasecboot setup
+5. Neustart ins BIOS, Secure Boot auf "Enabled", F10.
+6. Windows einbinden (Menuepunkt "Reboot to Windows"):
+     sudo omasecboot windows setup
+7. Kontrolle:
+     sudo omasecboot status
+
+
+TEIL 3 - WEG B: KEIN "DELETE" -> ZERTIFIKAT ANHAENGEN
+-----------------------------------------------------
+Alle Werksschluessel bleiben, nur das eigene Zertifikat kommt dazu.
+(omasecboot unterstuetzt das nicht - wird manuell + eigener Hook gemacht.)
+
+1. Schluessel erzeugen und Zertifikat exportieren:
+     sudo pacman -S sbctl
+     sudo sbctl create-keys
+     sudo openssl x509 -in /var/lib/sbctl/keys/db/db.pem -outform DER -out /tmp/DB.DER
+   DB.DER auf den FAT32-Stick kopieren.
+2. In /etc/default/limine setzen:
+     ENABLE_ENROLL_LIMINE_CONFIG=yes
+3. Fehlerhaften Omarchy-Hook abschalten (Bug omacom/omarchy#10945):
+     sudo mv /etc/pacman.d/hooks/99-omarchy-limine.hook{,.disabled}
+4. Limine versiegeln und signieren, dann pruefen:
+     sudo limine-enroll-config
+     sudo sbctl verify        (limine_x64.efi muss ein Haekchen haben)
+5. Im BIOS: Security -> Secure Boot -> Mode Custom -> Key Management
+   -> Authorized Signatures -> Append -> "Werksdefaults?" = No
+   -> USB-Stick -> DB.DER -> "Public Key Certificate" -> Yes
+   PK, KEK und dbx NICHT anfassen. Secure Boot Enabled, F10.
+6. Pruefen:
+     sudo sbctl status
+7. TODO: Auto-Signier-Hook (Pacman-Hook fuer limine/linux*) einrichten.
+   Hinweis: Ein BIOS-Update kann das angehaengte Zertifikat loeschen
+   -> dann Schritt 5 wiederholen.
+
+
+TEIL 4: ABSCHLUSS (5 Min.)
+--------------------------
+1. Backup auf den FAT32-Stick:
+     /var/lib/sbctl/
+     /var/lib/omasecboot/     (nur Weg A)
+   Grund: Ein Snapshot-Rollback setzt diese Ordner sonst zurueck.
+2. Windows starten -> msinfo32 -> "Sicherer Startzustand: Ein".
+3. BIOS: Security -> Administrator Password setzen.
+
+
+WENN WAS SCHIEFGEHT
+-------------------
+- Kein Bild:
+  Monitor an den Mainboard-Anschluss (iGPU), ins BIOS,
+  Secure Boot Disabled oder "Install Default Secure Boot Keys".
+- "Secure Boot Violation" / Omarchy startet nicht:
+  Secure Boot aus, Omarchy starten, "sudo omasecboot status"
+  bzw. "sudo sbctl verify" pruefen.
+- Rollback auf alten Snapshot:
+  Vorher Secure Boot ausschalten (alte Snapshots sind nicht signiert).
+- Nach BIOS-Update:
+  "sudo omasecboot status" bzw. "sudo sbctl status".
+  Fehlen Schluessel -> Teil 3 wiederholen.
+- Windows-Neustart geht nicht:
+  Nur EIN "Windows Boot Manager" im BIOS erlaubt; alte Eintraege
+  (z.B. Fedora) mit efibootmgr aufraeumen.
+
+
+QUELLEN
+-------
+- omasecboot:              https://github.com/peregrinus879/omasecboot
+- Community-Anleitung:     https://github.com/omacom/omarchy/discussions/5306
+- Bug unsigniertes Limine: https://github.com/omacom/omarchy/issues/10945
+- ASRock FAQ 2023-Zerts:   https://www.asrock.com.tw/support/faq.asp?id=551
